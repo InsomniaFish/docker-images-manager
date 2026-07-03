@@ -2,6 +2,8 @@
 
 一个基于 Django 的 Docker 镜像管理工具，提供 Web 界面来查看和管理主机上的 Docker 镜像。
 
+![Docker 镜像管理器界面](https://github.com/InsomniaFish/docker-images-manager/assets/103504449/5a75a682-2e9e-4d7e-9b2e-456b87e05b6e)
+
 ## 功能特性
 
 - ✅ 列出所有 Docker 镜像
