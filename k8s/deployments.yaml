@@ -1,0 +1,257 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: docker-images-manager
+  labels:
+    app: docker-images-manager
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: docker-images-manager
+  namespace: docker-images-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: docker-images-manager
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: docker-images-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: docker-images-manager
+subjects:
+  - kind: ServiceAccount
+    name: docker-images-manager
+    namespace: docker-images-manager
+---
+# Master01 节点的 Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-images-manager-master01
+  namespace: docker-images-manager
+  labels:
+    app: docker-images-manager
+    node: master01
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docker-images-manager
+      node: master01
+  template:
+    metadata:
+      labels:
+        app: docker-images-manager
+        node: master01
+    spec:
+      serviceAccountName: docker-images-manager
+      nodeSelector:
+        kubernetes.io/hostname: master01
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: docker-images-manager
+          image: harbor.apotos.com/docker-images-manager/docker-images-manager:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DEBUG
+              value: "False"
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 10
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: data
+          emptyDir: {}
+---
+# Node01 节点的 Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-images-manager-node01
+  namespace: docker-images-manager
+  labels:
+    app: docker-images-manager
+    node: node01
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docker-images-manager
+      node: node01
+  template:
+    metadata:
+      labels:
+        app: docker-images-manager
+        node: node01
+    spec:
+      serviceAccountName: docker-images-manager
+      nodeSelector:
+        kubernetes.io/hostname: node01
+      containers:
+        - name: docker-images-manager
+          image: harbor.apotos.com/docker-images-manager/docker-images-manager:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DEBUG
+              value: "False"
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 10
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: data
+          emptyDir: {}
+---
+# Node02 节点的 Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-images-manager-node02
+  namespace: docker-images-manager
+  labels:
+    app: docker-images-manager
+    node: node02
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docker-images-manager
+      node: node02
+  template:
+    metadata:
+      labels:
+        app: docker-images-manager
+        node: node02
+    spec:
+      serviceAccountName: docker-images-manager
+      nodeSelector:
+        kubernetes.io/hostname: node02
+      containers:
+        - name: docker-images-manager
+          image: harbor.apotos.com/docker-images-manager/docker-images-manager:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DEBUG
+              value: "False"
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 10
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: data
+          emptyDir: {}

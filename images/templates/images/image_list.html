@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker 镜像管理器</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v={% now 'U' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐳 Docker 镜像管理器</h1>
+        </header>
+
+        {% if error %}
+        <div class="alert alert-error">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-label">总镜像数</span>
+                <span class="stat-value" id="total-count">{{ total_count }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">正在使用</span>
+                <span class="stat-value" id="used-count">{{ used_count }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">未使用</span>
+                <span class="stat-value" id="unused-count">{{ unused_count }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">总大小</span>
+                <span class="stat-value" id="total-size">{{ total_size }}</span>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <button id="select-all" class="btn btn-secondary">全选</button>
+                <button id="select-none" class="btn btn-secondary">取消全选</button>
+                <button id="select-unused" class="btn btn-secondary">选择未使用</button>
+            </div>
+            <div class="toolbar-center" style="flex: 1; max-width: 600px; margin: 0 20px; display: flex; gap: 10px;">
+                <input type="text" id="search-input" class="search-input" placeholder="🔍 搜索镜像名称、标签或 ID..." style="width: 100%; padding: 10px 15px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px;">
+                <button id="search-btn" class="btn btn-info" style="white-space: nowrap;">🔍 搜索</button>
+            </div>
+            <div class="toolbar-right">
+                <button id="pull-btn" class="btn btn-success">📥 拉取镜像</button>
+                <button id="refresh-btn" class="btn btn-info">🔄 刷新</button>
+                <button id="delete-btn" class="btn btn-danger">🗑️ 删除选中</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th width="50">
+                            <input type="checkbox" id="header-checkbox" title="全选/全不选">
+                        </th>
+                        <th>镜像名称</th>
+                        <th>镜像 ID</th>
+                        <th>大小</th>
+                        <th>创建时间</th>
+                        <th>状态</th>
+                        <th>使用容器数</th>
+                    </tr>
+                </thead>
+                <tbody id="images-table-body">
+                    {% for image in images %}
+                    <tr data-image-id="{{ image.id }}">
+                        <td>
+                            <input type="checkbox" class="image-checkbox" 
+                                   value="{{ image.id }}" 
+                                   {% if image.is_used %}title="正在被容器使用"{% endif %}>
+                        </td>
+                        <td>
+                            <div class="image-name">
+                                {% if image.repository != '<none>' %}
+                                    <strong>{{ image.repository }}</strong>:{{ image.tag }}
+                                {% else %}
+                                    <strong>&lt;none&gt;:&lt;none&gt;</strong>
+                                {% endif %}
+                                {% if image.full_tags and image.full_tags|length > 1 %}
+                                    <div class="additional-tags">
+                                        {% for tag in image.full_tags %}
+                                            {% if tag != image.repository|add:':'|add:image.tag %}
+                                                <span class="tag">{{ tag }}</span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td><code>{{ image.short_id }}</code></td>
+                        <td>{{ image.size|filesizeformat }}</td>
+                        <td>
+                            {% if image.created %}
+                                {{ image.created|date:"Y-m-d H:i:s" }}
+                            {% else %}
+                                Unknown
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if image.is_used %}
+                                <span class="status-badge status-used">
+                                    ✓ 使用中
+                                </span>
+                            {% else %}
+                                <span class="status-badge status-unused">
+                                    ○ 未使用
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if image.containers_count > 0 %}
+                                <span class="containers-count">{{ image.containers_count }}</span>
+                            {% else %}
+                                <span class="containers-count">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="empty-message">
+                            暂无镜像数据，请确认 Docker 服务正常运行
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="selected-info" id="selected-info" style="display: none;">
+            已选择 <span id="selected-count">0</span> 个镜像，
+            总大小：<span id="selected-size">0 MB</span>
+        </div>
+    </div>
+
+    <!-- 删除确认对话框 -->
+    <div id="delete-modal" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h2>确认删除</h2>
+            <div class="modal-body">
+                <p>您确定要删除选中的镜像吗？</p>
+                <p id="delete-warning" class="warning-text" style="display: none;">
+                    ⚠️ 警告：部分选中的镜像正在被容器使用！
+                </p>
+                <div class="checkbox-wrapper">
+                    <label>
+                        <input type="checkbox" id="force-delete">
+                        强制删除（即使镜像正在被使用）
+                    </label>
+                </div>
+                <div id="images-to-delete" class="images-list">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-delete-btn">取消</button>
+                <button class="btn btn-danger" id="confirm-delete-btn">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 拉取镜像对话框 -->
+    <div id="pull-modal" class="modal" style="display: none;">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <h2>📥 拉取镜像</h2>
+            <div class="modal-body">
+                <p>请输入要拉取的镜像名称（每行一个）：</p>
+                <textarea id="pull-images-input" class="images-textarea" 
+                          placeholder="例如：&#10;nginx:latest&#10;redis:alpine&#10;mysql:8.0"></textarea>
+                <div id="pull-progress" class="progress-info" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <p id="progress-text">正在拉取...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-pull-btn" class="btn btn-secondary">取消</button>
+                <button id="confirm-pull-btn" class="btn btn-primary">开始拉取</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div id="message-container" class="message-container"></div>
+
+    <script src="{% static 'js/main.js' %}?v={% now 'U' %}"></script>
+</body>
+</html>
